@@ -1,0 +1,74 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_quickcoursesearch/search
+
+    Search field for the quick course search block.
+
+    Context variables required for this template:
+    * instanceid - Block instance id.
+    * actionurl - Page URL used when JavaScript is unavailable.
+    * query - Current query.
+    * minlength - Minimum query length.
+    * searchlabel - Accessible name of the field.
+    * placeholder - Field placeholder.
+    * search - Search button label.
+
+    Example context (json):
+    {
+        "instanceid": 1,
+        "actionurl": "https://example.com/my/",
+        "query": "",
+        "minlength": 2,
+        "searchlabel": "Search courses",
+        "placeholder": "Course name, short name, ID or ID number",
+        "search": "Search"
+    }
+}}
+<div class="quickcoursesearch"
+     data-region="quickcoursesearch"
+     data-instanceid="{{instanceid}}"
+     data-minlength="{{minlength}}">
+    <form method="get" action="{{actionurl}}" class="quickcoursesearch-form">
+        <input type="hidden" name="qcsi" value="{{instanceid}}">
+        <label class="sr-only" for="quickcoursesearch-q-{{instanceid}}">{{searchlabel}}</label>
+        <div class="input-group">
+            <input type="search"
+                   id="quickcoursesearch-q-{{instanceid}}"
+                   name="qcsq"
+                   value="{{query}}"
+                   class="form-control"
+                   placeholder="{{placeholder}}"
+                   autocomplete="off"
+                   enterkeyhint="search"
+                   data-region="search-input">
+            <div class="input-group-append">
+                <button type="submit" class="btn btn-primary">{{search}}</button>
+            </div>
+        </div>
+    </form>
+    <div data-region="search-results" aria-live="polite">
+        {{#searched}}
+            {{> block_quickcoursesearch/results }}
+        {{/searched}}
+    </div>
+</div>
+{{#js}}
+require(['block_quickcoursesearch/search'], function(Search) {
+    Search.init('[data-region="quickcoursesearch"][data-instanceid="{{instanceid}}"]');
+});
+{{/js}}
