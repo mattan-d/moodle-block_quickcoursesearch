@@ -32,7 +32,6 @@ $string['quickcoursesearch:search'] = 'Search courses from the quick course sear
 $string['cannotsearch'] = 'You do not have permission to search courses';
 $string['categorylabel'] = 'Category';
 $string['configtitle'] = 'Block title';
-$string['editsettings'] = 'Edit course settings';
 $string['hiddencourse'] = 'Hidden';
 $string['moreresults'] = 'Showing the first {$a} courses. Keep typing to narrow the search.';
 $string['noresults'] = 'No courses found';

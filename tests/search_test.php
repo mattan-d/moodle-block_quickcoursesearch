@@ -63,8 +63,6 @@ final class search_test extends advanced_testcase {
 
         $hidden = $this->course_by_id(search::search('Secret Lab'), $scenario->hidden->id);
         $this->assertTrue($hidden['hidden']);
-        $this->assertTrue($hidden['canedit']);
-        $this->assertStringContainsString('/course/edit.php', $hidden['editurl']);
         $this->assertStringContainsString('/course/view.php', $hidden['viewurl']);
         $this->assertStringContainsString('Science', $hidden['category']);
     }
@@ -94,9 +92,6 @@ final class search_test extends advanced_testcase {
         $other = search::search('Chemistry');
         $this->assertSame([], $this->ids($other));
         $this->assertSame(get_string('noresults', 'block_quickcoursesearch'), $other['message']);
-
-        $edited = $this->course_by_id(search::search('BIO101'), $scenario->visible->id);
-        $this->assertTrue($edited['canedit']);
     }
 
     /**
@@ -109,10 +104,7 @@ final class search_test extends advanced_testcase {
         $scenario = $this->create_scenario();
         $this->setUser($scenario->user);
 
-        $visible = $this->course_by_id(search::search('Alpha'), $scenario->visible->id);
-        $this->assertFalse($visible['canedit']);
-        $this->assertNull($visible['editurl']);
-
+        $this->assertContains($scenario->visible->id, $this->ids(search::search('Alpha')));
         $this->assertNotContains($scenario->hidden->id, $this->ids(search::search('Secret')));
         $this->assertNotContains($scenario->hiddencatcourse->id, $this->ids(search::search('Concealed')));
         $this->assertContains($scenario->other->id, $this->ids(search::search('Chemistry')));
@@ -144,7 +136,6 @@ final class search_test extends advanced_testcase {
         $this->assertContains($scenario->visible->id, $this->ids(search::search('Alpha')));
         $this->assertNotContains($scenario->hidden->id, $this->ids(search::search('Secret')));
         $this->assertNotContains($scenario->other->id, $this->ids(search::search('Chemistry')));
-        $this->assertFalse($this->course_by_id(search::search('Alpha'), $scenario->visible->id)['canedit']);
     }
 
     /**

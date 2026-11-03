@@ -311,11 +311,6 @@ class search {
      */
     private static function format_course(stdClass $course): array {
         $coursecontext = context_course::instance($course->id);
-        $canedit = has_capability('moodle/course:update', $coursecontext);
-        $editurl = null;
-        if ($canedit) {
-            $editurl = (new moodle_url('/course/edit.php', ['id' => $course->id]))->out(false);
-        }
 
         return [
             'id' => (int)$course->id,
@@ -329,8 +324,6 @@ class search {
             ]),
             'category' => self::category_path((int)$course->category),
             'viewurl' => (new moodle_url('/course/view.php', ['id' => $course->id]))->out(false),
-            'editurl' => $editurl,
-            'canedit' => $canedit,
             'hidden' => empty($course->visible),
         ];
     }
@@ -424,7 +417,6 @@ class search {
     private static function present(array $result): array {
         $result['hascourses'] = !empty($result['courses']);
         $result['hiddenlabel'] = get_string('hiddencourse', 'block_quickcoursesearch');
-        $result['editlabel'] = get_string('editsettings', 'block_quickcoursesearch');
         $result['categorylabel'] = get_string('categorylabel', 'block_quickcoursesearch');
         $result['shortnamelabel'] = get_string('shortnamelabel', 'block_quickcoursesearch');
         return $result;

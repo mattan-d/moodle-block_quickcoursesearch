@@ -33,7 +33,6 @@
         "more": false,
         "moremessage": "",
         "hiddenlabel": "Hidden",
-        "editlabel": "Edit course settings",
         "categorylabel": "Category",
         "shortnamelabel": "Short name",
         "courses": [{
@@ -42,8 +41,6 @@
             "shortname": "BIO",
             "category": "Science",
             "viewurl": "https://example.com/course/view.php?id=2",
-            "editurl": "https://example.com/course/edit.php?id=2",
-            "canedit": true,
             "hidden": false
         }]
     }
@@ -69,9 +66,6 @@
                         <span class="sr-only">{{shortnamelabel}} </span>{{shortname}}
                     </span>
                 </a>
-                {{#canedit}}
-                    <a class="quickcoursesearch-edit" href="{{editurl}}">{{editlabel}}</a>
-                {{/canedit}}
             </li>
         {{/courses}}
     </ul>

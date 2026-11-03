@@ -76,8 +76,6 @@ class external extends external_api {
                     'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
                     'category' => new external_value(PARAM_TEXT, 'Category path'),
                     'viewurl' => new external_value(PARAM_URL, 'Course page URL'),
-                    'editurl' => new external_value(PARAM_URL, 'Course settings URL', VALUE_OPTIONAL, null, NULL_ALLOWED),
-                    'canedit' => new external_value(PARAM_BOOL, 'Whether the user can edit course settings'),
                     'hidden' => new external_value(PARAM_BOOL, 'Whether the course is hidden'),
                 ])
             ),
@@ -87,7 +85,6 @@ class external extends external_api {
             'moremessage' => new external_value(PARAM_TEXT, 'Message shown when the result list is truncated'),
             'hascourses' => new external_value(PARAM_BOOL, 'Whether any course is returned'),
             'hiddenlabel' => new external_value(PARAM_TEXT, 'Label for a hidden course'),
-            'editlabel' => new external_value(PARAM_TEXT, 'Label for the settings link'),
             'categorylabel' => new external_value(PARAM_TEXT, 'Label for the category'),
             'shortnamelabel' => new external_value(PARAM_TEXT, 'Label for the short name'),
         ]);

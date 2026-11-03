@@ -32,7 +32,6 @@ $string['quickcoursesearch:search'] = 'חיפוש קורסים באמצעות מ
 $string['cannotsearch'] = 'אין לכם הרשאה לחפש קורסים';
 $string['categorylabel'] = 'קטגוריה';
 $string['configtitle'] = 'כותרת המשבצת';
-$string['editsettings'] = 'עריכת הגדרות הקורס';
 $string['hiddencourse'] = 'מוסתר';
 $string['moreresults'] = 'מוצגות {$a} התוצאות הראשונות. המשיכו להקליד כדי לצמצם את החיפוש.';
 $string['noresults'] = 'לא נמצאו קורסים';
