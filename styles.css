@@ -1,0 +1,50 @@
+.block_quickcoursesearch .quickcoursesearch-results {
+    margin-top: 0.75rem;
+}
+
+.block_quickcoursesearch .quickcoursesearch-result + .quickcoursesearch-result {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.block_quickcoursesearch a.quickcoursesearch-link {
+    color: inherit;
+    display: block;
+    text-decoration: none;
+}
+
+.block_quickcoursesearch a.quickcoursesearch-link:hover .quickcoursesearch-name,
+.block_quickcoursesearch a.quickcoursesearch-link:focus .quickcoursesearch-name {
+    text-decoration: underline;
+}
+
+.block_quickcoursesearch .quickcoursesearch-name {
+    display: block;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.block_quickcoursesearch .quickcoursesearch-meta,
+.block_quickcoursesearch .quickcoursesearch-edit,
+.block_quickcoursesearch .quickcoursesearch-message,
+.block_quickcoursesearch .quickcoursesearch-more {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.block_quickcoursesearch .quickcoursesearch-meta,
+.block_quickcoursesearch .quickcoursesearch-edit {
+    color: #6a737b;
+    font-size: 0.8125rem;
+}
+
+.block_quickcoursesearch .quickcoursesearch-edit {
+    margin-top: 0.15rem;
+}
+
+.block_quickcoursesearch .quickcoursesearch-name .badge {
+    font-weight: 600;
+    margin-inline-start: 0.25rem;
+    vertical-align: middle;
+}

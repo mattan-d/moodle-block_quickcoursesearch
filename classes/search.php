@@ -54,8 +54,11 @@ class search {
     /** @var int Minimum length of a non-numeric query. */
     public const MIN_QUERY_LENGTH = 2;
 
-    /** @var int Maximum matching rows loaded before permission filtering. */
-    public const MAX_SCAN = 300;
+    /** @var int Matching rows examined before the search stops. */
+    private const MAX_ROWS = 2000;
+
+    /** @var int Rows loaded per query while filtering by permission. */
+    private const BATCH_SIZE = 100;
 
     /** @var int Maximum accepted length of a search query. */
     public const MAX_QUERY_LENGTH = 100;
@@ -271,28 +274,30 @@ class search {
                  WHERE " . implode(' AND ', $where) . "
               ORDER BY c.fullname ASC, c.id ASC";
 
-        $records = [];
-        $rs = $DB->get_recordset_sql($sql, $params);
-        foreach ($rs as $record) {
-            \context_helper::preload_from_record($record);
-            $records[] = $record;
-            if (count($records) >= self::MAX_SCAN) {
-                break;
-            }
-        }
-        $rs->close();
-
+        // Permission checks query the database, so each batch is loaded and closed first.
         $courses = [];
         $more = false;
-        foreach ($records as $record) {
-            if (!self::user_can_view_course($record, $usesearchcap)) {
-                continue;
-            }
-            if (count($courses) === self::RESULT_LIMIT) {
-                $more = true;
+        $scanned = 0;
+        for ($offset = 0; $offset < self::MAX_ROWS && !$more; $offset += self::BATCH_SIZE) {
+            $records = $DB->get_records_sql($sql, $params, $offset, self::BATCH_SIZE);
+            if (!$records) {
                 break;
             }
-            $courses[] = self::format_course($record);
+            foreach ($records as $record) {
+                $scanned++;
+                \context_helper::preload_from_record($record);
+                if (!self::user_can_view_course($record, $usesearchcap)) {
+                    continue;
+                }
+                if (count($courses) === self::RESULT_LIMIT) {
+                    $more = true;
+                    break;
+                }
+                $courses[] = self::format_course($record);
+            }
+            if ($more || count($records) < self::BATCH_SIZE || $scanned >= self::MAX_ROWS) {
+                break;
+            }
         }
 
         return ['courses' => $courses, 'more' => $more];

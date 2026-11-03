@@ -30,7 +30,6 @@ $capabilities = [
         'archetypes' => [
             'manager' => CAP_ALLOW,
         ],
-        'clonepermissionsfrom' => 'moodle/my:manageblocks',
     ],
     'block/quickcoursesearch:addinstance' => [
         'riskbitmask' => RISK_SPAM | RISK_XSS,
