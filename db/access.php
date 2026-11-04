@@ -28,8 +28,10 @@ $capabilities = [
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => [
+            'user' => CAP_ALLOW,
             'manager' => CAP_ALLOW,
         ],
+        'clonepermissionsfrom' => 'moodle/my:manageblocks',
     ],
     'block/quickcoursesearch:addinstance' => [
         'riskbitmask' => RISK_SPAM | RISK_XSS,

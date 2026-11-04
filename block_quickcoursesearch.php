@@ -54,12 +54,19 @@ class block_quickcoursesearch extends block_base {
     }
 
     /**
-     * The block can be placed on any page, including Dashboard and the front page.
+     * The block can be placed on any page, including the Dashboard (/my/index.php).
+     *
+     * my and my-index are set explicitly because the Dashboard checks those formats
+     * before offering the block in the add-a-block menu.
      *
      * @return array
      */
     public function applicable_formats() {
-        return ['all' => true];
+        return [
+            'all' => true,
+            'my' => true,
+            'my-index' => true,
+        ];
     }
 
     /**

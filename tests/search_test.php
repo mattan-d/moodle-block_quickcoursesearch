@@ -203,6 +203,38 @@ final class search_test extends advanced_testcase {
     }
 
     /**
+     * The block can be added on the Dashboard page.
+     *
+     * @covers \block_quickcoursesearch::applicable_formats
+     * @covers \block_quickcoursesearch::user_can_addto
+     */
+    public function test_block_can_be_added_to_dashboard(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        $systemcontext = context_system::instance();
+        $userroleid = $DB->get_field('role', 'id', ['shortname' => 'user']);
+        assign_capability(
+            'block/quickcoursesearch:myaddinstance',
+            CAP_ALLOW,
+            $userroleid,
+            $systemcontext->id,
+            true
+        );
+        $this->setUser($user);
+
+        $page = new \moodle_page();
+        $page->set_context(\context_user::instance($user->id));
+        $page->set_pagelayout('mydashboard');
+        $page->set_pagetype('my-index');
+        $page->set_url(new \moodle_url('/my/index.php'));
+
+        $block = new \block_quickcoursesearch();
+        $this->assertTrue($block->user_can_addto($page));
+        $this->assertTrue(blocks_name_allowed_in_format('quickcoursesearch', 'my-index'));
+    }
+
+    /**
      * The block is rendered for an allowed user and omitted for a user without permission.
      *
      * @covers \block_quickcoursesearch::get_content

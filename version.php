@@ -24,7 +24,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'block_quickcoursesearch';
-$plugin->version   = 2026110301;
+$plugin->version   = 2026110400;
 $plugin->requires  = 2024100100; // Moodle 4.5.
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = '1.0';
