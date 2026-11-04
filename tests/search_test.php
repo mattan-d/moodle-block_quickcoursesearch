@@ -68,12 +68,12 @@ final class search_test extends advanced_testcase {
     }
 
     /**
-     * A manager assigned on one category sees only courses in that category.
+     * A category manager sees hidden courses they manage, and visible courses the user role can browse.
      *
      * @covers ::search
      * @covers ::user_can_view_course
      */
-    public function test_category_manager_is_limited_to_assigned_categories(): void {
+    public function test_category_manager_sees_courses_they_can_view(): void {
         $this->resetAfterTest();
         $scenario = $this->create_scenario();
         $this->setUser($scenario->manager);
@@ -89,9 +89,55 @@ final class search_test extends advanced_testcase {
         $hiddencategory = $this->ids(search::search('Concealed'));
         $this->assertContains($scenario->hiddencatcourse->id, $hiddencategory);
 
-        $other = search::search('Chemistry');
-        $this->assertSame([], $this->ids($other));
-        $this->assertSame(get_string('noresults', 'block_quickcoursesearch'), $other['message']);
+        // The authenticated user role may browse visible courses outside the managed category.
+        $this->assertContains($scenario->other->id, $this->ids(search::search('Chemistry')));
+    }
+
+    /**
+     * Category management is enough when the user cannot browse the whole course list
+     * and does not have the plugin capability.
+     *
+     * @covers ::search
+     * @covers ::user_can_search
+     */
+    public function test_category_manager_without_catalogue_permission_sees_managed_courses(): void {
+        $this->resetAfterTest();
+        $scenario = $this->create_scenario();
+        $systemcontext = context_system::instance();
+        $roleid = create_role('No catalogue or plugin search', 'qcsnometa', '');
+        assign_capability('moodle/category:viewcourselist', CAP_PROHIBIT, $roleid, $systemcontext->id);
+        assign_capability('block/quickcoursesearch:search', CAP_PROHIBIT, $roleid, $systemcontext->id);
+        role_assign($roleid, $scenario->manager->id, $systemcontext->id);
+
+        $this->setUser($scenario->manager);
+        $this->assertTrue(search::user_can_search());
+        $this->assertContains($scenario->visible->id, $this->ids(search::search('Alpha')));
+        $this->assertContains($scenario->hidden->id, $this->ids(search::search('Secret')));
+        $this->assertNotContains($scenario->otherhidden->id, $this->ids(search::search('Secret')));
+        $this->assertContains($scenario->hiddencatcourse->id, $this->ids(search::search('Concealed')));
+        $this->assertSame([], $this->ids(search::search('Chemistry')));
+    }
+
+    /**
+     * Enrolment is a view permission even when catalogue browsing is prohibited.
+     *
+     * @covers ::search
+     */
+    public function test_enrolled_user_without_catalogue_permission_sees_own_course(): void {
+        $this->resetAfterTest();
+        $scenario = $this->create_scenario();
+        $student = $this->getDataGenerator()->create_user();
+        $systemcontext = context_system::instance();
+        $roleid = create_role('No catalogue for student', 'qcsnocat', '');
+        assign_capability('moodle/category:viewcourselist', CAP_PROHIBIT, $roleid, $systemcontext->id);
+        assign_capability('block/quickcoursesearch:search', CAP_PROHIBIT, $roleid, $systemcontext->id);
+        role_assign($roleid, $student->id, $systemcontext->id);
+        $this->getDataGenerator()->enrol_user($student->id, $scenario->visible->id);
+
+        $this->setUser($student);
+        $this->assertTrue(search::user_can_search());
+        $this->assertContains($scenario->visible->id, $this->ids(search::search('Alpha')));
+        $this->assertNotContains($scenario->other->id, $this->ids(search::search('Chemistry')));
     }
 
     /**

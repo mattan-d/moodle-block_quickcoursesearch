@@ -87,7 +87,11 @@ class search {
         if (is_siteadmin()) {
             return true;
         }
-        return self::has_any_view_capability();
+        if (self::has_any_view_capability()) {
+            return true;
+        }
+        // A participant can search the courses they are enrolled in.
+        return (bool)enrol_get_my_courses(null, null, 1);
     }
 
     /**
@@ -219,6 +223,53 @@ class search {
         }
 
         return self::category_is_visible((int)$course->category);
+    }
+
+    /**
+     * SQL that keeps the candidate courses inside contexts the user can view.
+     *
+     * An empty string means every matching course is a candidate. Null means the
+     * user cannot see any course, so the query should not run.
+     *
+     * @return array{0: string|null, 1: array}
+     */
+    private static function view_limit_sql(): array {
+        global $DB, $USER;
+
+        if (is_siteadmin()) {
+            return ['', []];
+        }
+
+        $systemcontext = context_system::instance();
+        foreach (self::view_capabilities() as $capability) {
+            if (has_capability($capability, $systemcontext)) {
+                // A system-level permission can reach every category. Hidden courses are still filtered later.
+                return ['', []];
+            }
+        }
+
+        $parts = [];
+        $params = [];
+        foreach (self::view_capabilities() as $capability) {
+            [$sql, $capparams] = \core\access\get_user_capability_course_helper::get_sql((int)$USER->id, $capability);
+            if (empty($sql)) {
+                continue;
+            }
+            $parts[] = '(' . $sql . ')';
+            $params = array_merge($params, $capparams);
+        }
+
+        $enrolled = enrol_get_my_courses(null, null, 0);
+        if ($enrolled) {
+            [$insql, $inparams] = $DB->get_in_or_equal(array_keys($enrolled), SQL_PARAMS_QM);
+            $parts[] = 'c.id ' . $insql;
+            $params = array_merge($params, $inparams);
+        }
+
+        if (!$parts) {
+            return [null, []];
+        }
+        return ['(' . implode(' OR ', $parts) . ')', $params];
     }
 
     /**
