@@ -34,15 +34,10 @@ use stdClass;
 /**
  * Searches courses the current user is allowed to see.
  *
- * The block is available to users with block/quickcoursesearch:search or
- * moodle/category:viewcourselist. Site administrators can search every course.
- *
- * Anyone who holds block/quickcoursesearch:search is limited to the contexts
- * where that capability applies. A manager role assigned on one category
- * therefore sees only that category, even though moodle/category:viewcourselist
- * is allowed for authenticated users at system level. Users who do not hold the
- * plugin capability fall back to moodle/category:viewcourselist and Moodle's
- * normal course visibility rules.
+ * A course is included when the user can view it: site administrators see every
+ * course, and everyone else sees courses they can browse, manage, or enter.
+ * A category manager therefore sees the courses in the categories where that
+ * role is assigned, including hidden courses they are allowed to view.
  *
  * @package    block_quickcoursesearch
  */
@@ -64,6 +59,23 @@ class search {
     public const MAX_QUERY_LENGTH = 100;
 
     /**
+     * Capabilities that let a user see a course in this search.
+     *
+     * Category manager roles often have course:view or category:manage on one
+     * category and do not have moodle/category:viewcourselist.
+     *
+     * @return string[]
+     */
+    private static function view_capabilities(): array {
+        return [
+            'moodle/category:viewcourselist',
+            'moodle/course:view',
+            'moodle/category:manage',
+            'block/quickcoursesearch:search',
+        ];
+    }
+
+    /**
      * Whether the current user may use the block.
      *
      * @return bool
@@ -75,14 +87,7 @@ class search {
         if (is_siteadmin()) {
             return true;
         }
-        if (self::has_search_capability_anywhere()) {
-            return true;
-        }
-        $systemcontext = context_system::instance();
-        if (has_capability('moodle/category:viewcourselist', $systemcontext)) {
-            return true;
-        }
-        return core_course_category::has_capability_on_any('moodle/category:viewcourselist');
+        return self::has_any_view_capability();
     }
 
     /**
@@ -159,37 +164,33 @@ class search {
     }
 
     /**
-     * Whether this user holds the plugin capability in any context.
+     * Whether the user has any course-view capability in at least one context.
      *
      * @return bool
      */
-    public static function has_search_capability_anywhere(): bool {
+    private static function has_any_view_capability(): bool {
         global $USER;
 
-        if (!isloggedin()) {
-            return false;
+        $systemcontext = context_system::instance();
+        foreach (self::view_capabilities() as $capability) {
+            if (has_capability($capability, $systemcontext)) {
+                return true;
+            }
+            [$limitsql] = \core\access\get_user_capability_course_helper::get_sql((int)$USER->id, $capability);
+            if (!empty($limitsql)) {
+                return true;
+            }
         }
-        if (is_siteadmin()) {
-            return true;
-        }
-        if (has_capability('block/quickcoursesearch:search', context_system::instance())) {
-            return true;
-        }
-        [$limitsql] = \core\access\get_user_capability_course_helper::get_sql(
-            (int)$USER->id,
-            'block/quickcoursesearch:search'
-        );
-        return !empty($limitsql);
+        return false;
     }
 
     /**
      * Whether the current user may see this course in search results.
      *
      * @param stdClass $course Course record with id, category and visible.
-     * @param bool|null $usesearchcap Precomputed has_search_capability_anywhere() result.
      * @return bool
      */
-    public static function user_can_view_course(stdClass $course, ?bool $usesearchcap = null): bool {
+    public static function user_can_view_course(stdClass $course): bool {
         if ((int)$course->id === SITEID || !isloggedin()) {
             return false;
         }
@@ -197,19 +198,22 @@ class search {
             return true;
         }
 
-        if ($usesearchcap === null) {
-            $usesearchcap = self::has_search_capability_anywhere();
+        $coursecontext = context_course::instance($course->id);
+        // Enrolment grants access, including to a hidden course the user is a participant in.
+        if (is_enrolled($coursecontext, null, '', true)) {
+            return true;
         }
 
-        $coursecontext = context_course::instance($course->id);
-        if ($usesearchcap) {
-            if (!has_capability('block/quickcoursesearch:search', $coursecontext)) {
-                return false;
-            }
-        } else if (!core_course_category::can_view_course_info($course)) {
+        $categorycontext = !empty($course->category) ? context_coursecat::instance($course->category) : null;
+        $canview = has_capability('moodle/course:view', $coursecontext)
+            || has_capability('block/quickcoursesearch:search', $coursecontext)
+            || ($categorycontext && (
+                has_capability('moodle/category:viewcourselist', $categorycontext)
+                || has_capability('moodle/category:manage', $categorycontext)
+            ));
+        if (!$canview) {
             return false;
         }
-
         if (empty($course->visible) && !has_capability('moodle/course:viewhiddencourses', $coursecontext)) {
             return false;
         }
@@ -224,9 +228,13 @@ class search {
      * @return array{courses: array, more: bool}
      */
     private static function find_courses(string $query): array {
-        global $DB, $USER;
+        global $DB;
 
-        $usesearchcap = !is_siteadmin() && self::has_search_capability_anywhere();
+        [$limitsql, $limitparams] = self::view_limit_sql();
+        if ($limitsql === null) {
+            return ['courses' => [], 'more' => false];
+        }
+
         $courseid = self::query_course_id($query);
         $params = [CONTEXT_COURSE];
         $where = ['c.id <> ?'];
@@ -255,14 +263,7 @@ class search {
         }
         $where[] = '(' . implode(' OR ', $clauses) . ')';
 
-        if ($usesearchcap) {
-            [$limitsql, $limitparams] = \core\access\get_user_capability_course_helper::get_sql(
-                (int)$USER->id,
-                'block/quickcoursesearch:search'
-            );
-            if (empty($limitsql)) {
-                return ['courses' => [], 'more' => false];
-            }
+        if ($limitsql !== '') {
             $where[] = $limitsql;
             $params = array_merge($params, $limitparams);
         }
@@ -286,7 +287,7 @@ class search {
             foreach ($records as $record) {
                 $scanned++;
                 \context_helper::preload_from_record($record);
-                if (!self::user_can_view_course($record, $usesearchcap)) {
+                if (!self::user_can_view_course($record)) {
                     continue;
                 }
                 if (count($courses) === self::RESULT_LIMIT) {
