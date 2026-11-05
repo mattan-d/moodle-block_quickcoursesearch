@@ -34,10 +34,10 @@ use stdClass;
 /**
  * Searches courses the current user is allowed to see.
  *
- * A course is included when the user can view it: site administrators see every
- * course, and everyone else sees courses they can browse, manage, or enter.
- * A category manager therefore sees the courses in the categories where that
- * role is assigned, including hidden courses they are allowed to view.
+ * Site administrators and system-level managers can search every course.
+ * A role assigned on a category can search every course in that category and
+ * its subcategories. Everyone else can search the courses they are allowed to
+ * browse or the courses they are enrolled in.
  *
  * @package    block_quickcoursesearch
  */
@@ -59,23 +59,6 @@ class search {
     public const MAX_QUERY_LENGTH = 100;
 
     /**
-     * Capabilities that let a user see a course in this search.
-     *
-     * Category manager roles often have course:view or category:manage on one
-     * category and do not have moodle/category:viewcourselist.
-     *
-     * @return string[]
-     */
-    private static function view_capabilities(): array {
-        return [
-            'moodle/category:viewcourselist',
-            'moodle/course:view',
-            'moodle/category:manage',
-            'block/quickcoursesearch:search',
-        ];
-    }
-
-    /**
      * Whether the current user may use the block.
      *
      * @return bool
@@ -84,10 +67,16 @@ class search {
         if (!isloggedin()) {
             return false;
         }
-        if (is_siteadmin()) {
+        if (is_siteadmin() || self::has_system_course_access()) {
             return true;
         }
-        if (self::has_any_view_capability()) {
+        if (self::managed_category_ids()) {
+            return true;
+        }
+        if (has_capability('moodle/category:viewcourselist', context_system::instance())) {
+            return true;
+        }
+        if (core_course_category::has_capability_on_any('moodle/category:viewcourselist')) {
             return true;
         }
         // A participant can search the courses they are enrolled in.
@@ -168,20 +157,23 @@ class search {
     }
 
     /**
-     * Whether the user has any course-view capability in at least one context.
+     * Whether a system-level role lets this user manage courses across the site.
+     *
+     * moodle/category:viewcourselist is intentionally absent. It is the normal
+     * catalogue permission of an authenticated user and must not turn a category
+     * manager into a site-wide search.
      *
      * @return bool
      */
-    private static function has_any_view_capability(): bool {
-        global $USER;
-
+    private static function has_system_course_access(): bool {
         $systemcontext = context_system::instance();
-        foreach (self::view_capabilities() as $capability) {
+        foreach ([
+            'moodle/category:manage',
+            'moodle/course:create',
+            'moodle/course:update',
+            'block/quickcoursesearch:search',
+        ] as $capability) {
             if (has_capability($capability, $systemcontext)) {
-                return true;
-            }
-            [$limitsql] = \core\access\get_user_capability_course_helper::get_sql((int)$USER->id, $capability);
-            if (!empty($limitsql)) {
                 return true;
             }
         }
@@ -189,16 +181,76 @@ class search {
     }
 
     /**
+     * Categories where a role assignment grants access to the courses inside them.
+     *
+     * The returned ids include subcategories. Any course or category capability
+     * on the assigned role qualifies, so a custom category-manager role is covered
+     * even when it does not have block/quickcoursesearch:search.
+     *
+     * @return int[]
+     */
+    private static function managed_category_ids(): array {
+        global $DB, $USER;
+
+        $coursecap = $DB->sql_like('rc.capability', '?', false);
+        $categorycap = $DB->sql_like('rc.capability', '?', false);
+        $assigned = $DB->get_fieldset_sql(
+            "SELECT DISTINCT assignctx.instanceid
+               FROM {role_assignments} ra
+               JOIN {context} assignctx ON assignctx.id = ra.contextid
+               JOIN {role_capabilities} rc ON rc.roleid = ra.roleid AND rc.permission = ?
+              WHERE ra.userid = ?
+                AND assignctx.contextlevel = ?
+                AND (rc.contextid = ? OR rc.contextid = assignctx.id)
+                AND ({$coursecap} OR {$categorycap} OR rc.capability = ?)",
+            [
+                CAP_ALLOW,
+                (int)$USER->id,
+                CONTEXT_COURSECAT,
+                context_system::instance()->id,
+                'moodle/course:%',
+                'moodle/category:%',
+                'block/quickcoursesearch:search',
+            ]
+        );
+        if (!$assigned) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($assigned as $categoryid) {
+            $categoryid = (int)$categoryid;
+            $ids[$categoryid] = $categoryid;
+            $path = $DB->get_field('course_categories', 'path', ['id' => $categoryid]);
+            if ($path === false || $path === null || $path === '') {
+                continue;
+            }
+            $children = $DB->get_fieldset_sql(
+                "SELECT id
+                   FROM {course_categories}
+                  WHERE " . $DB->sql_like('path', '?', false),
+                [$DB->sql_like_escape($path) . '/%']
+            );
+            foreach ($children as $childid) {
+                $childid = (int)$childid;
+                $ids[$childid] = $childid;
+            }
+        }
+        return array_values($ids);
+    }
+
+    /**
      * Whether the current user may see this course in search results.
      *
      * @param stdClass $course Course record with id, category and visible.
+     * @param int[]|null $managedcategoryids Categories already resolved for this search.
      * @return bool
      */
-    public static function user_can_view_course(stdClass $course): bool {
+    public static function user_can_view_course(stdClass $course, ?array $managedcategoryids = null): bool {
         if ((int)$course->id === SITEID || !isloggedin()) {
             return false;
         }
-        if (is_siteadmin()) {
+        if (is_siteadmin() || self::has_system_course_access()) {
             return true;
         }
 
@@ -208,55 +260,80 @@ class search {
             return true;
         }
 
-        $categorycontext = !empty($course->category) ? context_coursecat::instance($course->category) : null;
-        $canview = has_capability('moodle/course:view', $coursecontext)
-            || has_capability('block/quickcoursesearch:search', $coursecontext)
-            || ($categorycontext && (
-                has_capability('moodle/category:viewcourselist', $categorycontext)
-                || has_capability('moodle/category:manage', $categorycontext)
-            ));
-        if (!$canview) {
+        if ($managedcategoryids === null) {
+            $managedcategoryids = self::managed_category_ids();
+        }
+        $categoryid = (int)$course->category;
+        if (in_array($categoryid, $managedcategoryids, true)) {
+            return self::can_view_managed_course($course, $coursecontext);
+        }
+        // A category role is a narrower scope than the site catalogue.
+        if ($managedcategoryids) {
+            return false;
+        }
+
+        $categorycontext = $categoryid ? context_coursecat::instance($categoryid) : null;
+        if (!$categorycontext || !has_capability('moodle/category:viewcourselist', $categorycontext)) {
             return false;
         }
         if (empty($course->visible) && !has_capability('moodle/course:viewhiddencourses', $coursecontext)) {
             return false;
         }
+        return self::category_is_visible($categoryid);
+    }
 
+    /**
+     * A course inside a category the user manages or can browse from a category role.
+     *
+     * Managers see hidden courses and courses in hidden subcategories. A role that
+     * can only search or browse the category still follows the normal visibility rules.
+     *
+     * @param stdClass $course
+     * @param context_course $coursecontext
+     * @return bool
+     */
+    private static function can_view_managed_course(stdClass $course, context_course $coursecontext): bool {
+        $categorycontext = context_coursecat::instance($course->category);
+        $canseehidden = has_capability('moodle/course:viewhiddencourses', $coursecontext)
+            || has_capability('moodle/category:manage', $categorycontext)
+            || has_capability('moodle/course:update', $coursecontext)
+            || has_capability('moodle/course:view', $coursecontext)
+            || has_capability('moodle/course:visibility', $coursecontext);
+        if ($canseehidden) {
+            return true;
+        }
+        if (empty($course->visible)) {
+            return false;
+        }
         return self::category_is_visible((int)$course->category);
     }
 
     /**
-     * SQL that keeps the candidate courses inside contexts the user can view.
+     * SQL that keeps the candidate courses inside categories the user can view.
      *
      * An empty string means every matching course is a candidate. Null means the
      * user cannot see any course, so the query should not run.
      *
+     * @param int[] $categoryids Categories the user can search, including subcategories.
      * @return array{0: string|null, 1: array}
      */
-    private static function view_limit_sql(): array {
-        global $DB, $USER;
+    private static function view_limit_sql(array $categoryids): array {
+        global $DB;
 
-        if (is_siteadmin()) {
+        if (is_siteadmin() || self::has_system_course_access()) {
             return ['', []];
-        }
-
-        $systemcontext = context_system::instance();
-        foreach (self::view_capabilities() as $capability) {
-            if (has_capability($capability, $systemcontext)) {
-                // A system-level permission can reach every category. Hidden courses are still filtered later.
-                return ['', []];
-            }
         }
 
         $parts = [];
         $params = [];
-        foreach (self::view_capabilities() as $capability) {
-            [$sql, $capparams] = \core\access\get_user_capability_course_helper::get_sql((int)$USER->id, $capability);
-            if (empty($sql)) {
-                continue;
-            }
-            $parts[] = '(' . $sql . ')';
-            $params = array_merge($params, $capparams);
+        if ($categoryids) {
+            [$insql, $inparams] = $DB->get_in_or_equal($categoryids, SQL_PARAMS_QM);
+            $parts[] = 'c.category ' . $insql;
+            $params = array_merge($params, $inparams);
+        } else if (has_capability('moodle/category:viewcourselist', context_system::instance())
+                || core_course_category::has_capability_on_any('moodle/category:viewcourselist')) {
+            // Catalogue browsing is not limited to one category. Hidden courses are filtered per course.
+            return ['', []];
         }
 
         $enrolled = enrol_get_my_courses(null, null, 0);
@@ -281,7 +358,8 @@ class search {
     private static function find_courses(string $query): array {
         global $DB;
 
-        [$limitsql, $limitparams] = self::view_limit_sql();
+        $categoryids = (is_siteadmin() || self::has_system_course_access()) ? [] : self::managed_category_ids();
+        [$limitsql, $limitparams] = self::view_limit_sql($categoryids);
         if ($limitsql === null) {
             return ['courses' => [], 'more' => false];
         }
@@ -338,7 +416,7 @@ class search {
             foreach ($records as $record) {
                 $scanned++;
                 \context_helper::preload_from_record($record);
-                if (!self::user_can_view_course($record)) {
+                if (!self::user_can_view_course($record, $categoryids)) {
                     continue;
                 }
                 if (count($courses) === self::RESULT_LIMIT) {

@@ -68,7 +68,7 @@ final class search_test extends advanced_testcase {
     }
 
     /**
-     * A category manager sees hidden courses they manage, and visible courses the user role can browse.
+     * A category manager searches every course in that category tree, and no other category.
      *
      * @covers ::search
      * @covers ::user_can_view_course
@@ -89,8 +89,12 @@ final class search_test extends advanced_testcase {
         $hiddencategory = $this->ids(search::search('Concealed'));
         $this->assertContains($scenario->hiddencatcourse->id, $hiddencategory);
 
-        // The authenticated user role may browse visible courses outside the managed category.
-        $this->assertContains($scenario->other->id, $this->ids(search::search('Chemistry')));
+        $child = $this->ids(search::search('Cell'));
+        $this->assertContains($scenario->childcourse->id, $child);
+
+        $other = search::search('Chemistry');
+        $this->assertSame([], $this->ids($other));
+        $this->assertSame(get_string('noresults', 'block_quickcoursesearch'), $other['message']);
     }
 
     /**
@@ -115,6 +119,7 @@ final class search_test extends advanced_testcase {
         $this->assertContains($scenario->hidden->id, $this->ids(search::search('Secret')));
         $this->assertNotContains($scenario->otherhidden->id, $this->ids(search::search('Secret')));
         $this->assertContains($scenario->hiddencatcourse->id, $this->ids(search::search('Concealed')));
+        $this->assertContains($scenario->childcourse->id, $this->ids(search::search('Cell')));
         $this->assertSame([], $this->ids(search::search('Chemistry')));
     }
 
@@ -151,6 +156,7 @@ final class search_test extends advanced_testcase {
         $this->setUser($scenario->user);
 
         $this->assertContains($scenario->visible->id, $this->ids(search::search('Alpha')));
+        $this->assertContains($scenario->childcourse->id, $this->ids(search::search('Cell')));
         $this->assertNotContains($scenario->hidden->id, $this->ids(search::search('Secret')));
         $this->assertNotContains($scenario->hiddencatcourse->id, $this->ids(search::search('Concealed')));
         $this->assertContains($scenario->other->id, $this->ids(search::search('Chemistry')));
@@ -180,7 +186,9 @@ final class search_test extends advanced_testcase {
         $this->setUser($user);
         $this->assertTrue(search::user_can_search());
         $this->assertContains($scenario->visible->id, $this->ids(search::search('Alpha')));
+        $this->assertContains($scenario->childcourse->id, $this->ids(search::search('Cell')));
         $this->assertNotContains($scenario->hidden->id, $this->ids(search::search('Secret')));
+        $this->assertNotContains($scenario->hiddencatcourse->id, $this->ids(search::search('Concealed')));
         $this->assertNotContains($scenario->other->id, $this->ids(search::search('Chemistry')));
     }
 
@@ -326,6 +334,10 @@ final class search_test extends advanced_testcase {
             'parent' => $category->id,
             'visible' => 0,
         ]);
+        $childcategory = $generator->create_category([
+            'name' => 'Biology',
+            'parent' => $category->id,
+        ]);
 
         $visible = $generator->create_course([
             'category' => $category->id,
@@ -359,6 +371,12 @@ final class search_test extends advanced_testcase {
             'shortname' => 'SEM1',
             'idnumber' => 'ID-SEM-1',
         ]);
+        $childcourse = $generator->create_course([
+            'category' => $childcategory->id,
+            'fullname' => 'Cell Biology',
+            'shortname' => 'BIO220',
+            'idnumber' => 'ID-BIO-220',
+        ]);
 
         $managerroleid = $DB->get_field('role', 'id', ['shortname' => 'manager']);
         assign_capability(
@@ -378,6 +396,7 @@ final class search_test extends advanced_testcase {
             'other' => $other,
             'otherhidden' => $otherhidden,
             'hiddencatcourse' => $hiddencatcourse,
+            'childcourse' => $childcourse,
             'manager' => $manager,
             'user' => $generator->create_user(),
         ];
