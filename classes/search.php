@@ -525,35 +525,56 @@ class search {
         }
 
         [$coursesql, $courseparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'cid');
+        $contexts = $DB->get_records_sql(
+            "SELECT id, instanceid, path
+               FROM {context}
+              WHERE contextlevel = :courselevel
+                AND instanceid {$coursesql}",
+            ['courselevel' => CONTEXT_COURSE] + $courseparams
+        );
+        if (!$contexts) {
+            return [];
+        }
+
+        // A lecturer role may be assigned on the course or on a parent category.
+        $coursesbycontext = [];
+        foreach ($contexts as $context) {
+            $parts = preg_split('|/|', $context->path, -1, PREG_SPLIT_NO_EMPTY);
+            foreach ($parts as $contextid) {
+                $coursesbycontext[(int)$contextid][] = (int)$context->instanceid;
+            }
+        }
+
+        [$ctxsql, $ctxparams] = $DB->get_in_or_equal(array_keys($coursesbycontext), SQL_PARAMS_NAMED, 'ctx');
+        [$enrolsql, $enrolparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'eid');
         [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'rid');
         $namefields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
-        $ancestor = $DB->sql_concat('assignctx.path', "'/%'");
-
-        $sql = "SELECT target.instanceid AS courseid, u.id AS userid, {$namefields}
-                  FROM {context} target
-                  JOIN {context} assignctx
-                    ON assignctx.id = target.id OR target.path LIKE {$ancestor}
-                  JOIN {role_assignments} ra ON ra.contextid = assignctx.id AND ra.roleid {$rolesql}
+        $sql = "SELECT ra.contextid, e.courseid, u.id AS userid, {$namefields}
+                  FROM {role_assignments} ra
                   JOIN {user} u ON u.id = ra.userid AND u.deleted = 0
-                  JOIN {enrol} e ON e.courseid = target.instanceid AND e.status = :enabled
+                  JOIN {enrol} e ON e.courseid {$enrolsql} AND e.status = :enabled
                   JOIN {user_enrolments} ue ON ue.enrolid = e.id AND ue.userid = u.id
                        AND ue.status = :active
                        AND ue.timestart <= :now1
                        AND (ue.timeend = 0 OR ue.timeend > :now2)
-                 WHERE target.contextlevel = :courselevel
-                   AND target.instanceid {$coursesql}";
+                 WHERE ra.contextid {$ctxsql}
+                   AND ra.roleid {$rolesql}";
         $params = [
             'enabled' => ENROL_INSTANCE_ENABLED,
             'active' => ENROL_USER_ACTIVE,
             'now1' => time(),
             'now2' => time(),
-            'courselevel' => CONTEXT_COURSE,
-        ] + $courseparams + $roleparams;
+        ] + $ctxparams + $enrolparams + $roleparams;
 
         $bycourse = [];
         $records = $DB->get_recordset_sql($sql, $params);
         foreach ($records as $record) {
-            $bycourse[(int)$record->courseid][(int)$record->userid] = $record;
+            $courseid = (int)$record->courseid;
+            $covered = $coursesbycontext[(int)$record->contextid] ?? [];
+            if (!in_array($courseid, $covered, true)) {
+                continue;
+            }
+            $bycourse[$courseid][(int)$record->userid] = $record;
         }
         $records->close();
 
@@ -562,7 +583,7 @@ class search {
             $context = context_course::instance($courseid);
             $fullnames = [];
             foreach ($users as $user) {
-                $fullnames[] = core_user::get_fullname($user, $context);
+                $fullnames[] = \core_user::get_fullname($user, $context);
             }
             \core_collator::asort($fullnames);
             $names[$courseid] = implode(', ', $fullnames);
