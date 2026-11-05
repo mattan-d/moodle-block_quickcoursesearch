@@ -95,6 +95,61 @@ final class search_test extends advanced_testcase {
     }
 
     /**
+     * A lecturer name finds that lecturer's courses and not a student's courses.
+     *
+     * @covers ::search
+     */
+    public function test_search_by_lecturer_name(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $scenario = $this->create_scenario();
+        $generator = $this->getDataGenerator();
+        $ada = $generator->create_user(['firstname' => 'Ada', 'lastname' => 'Lovelace']);
+        $alan = $generator->create_user(['firstname' => 'Alan', 'lastname' => 'Turing']);
+        $student = $generator->create_user(['firstname' => 'Grace', 'lastname' => 'Hopper']);
+        $teacherrole = (int)$DB->get_field('role', 'id', ['shortname' => 'editingteacher']);
+
+        $adacourse = $generator->create_course([
+            'category' => $scenario->category->id,
+            'fullname' => 'Shared Seminar',
+            'shortname' => 'SEM-ADA',
+        ]);
+        $alancourse = $generator->create_course([
+            'category' => $scenario->category->id,
+            'fullname' => 'Shared Seminar',
+            'shortname' => 'SEM-ALAN',
+        ]);
+        $othercourse = $generator->create_course([
+            'category' => $scenario->other->category,
+            'fullname' => 'Shared Seminar',
+            'shortname' => 'SEM-ARTS',
+        ]);
+        $generator->enrol_user($ada->id, $adacourse->id, $teacherrole);
+        $generator->enrol_user($alan->id, $alancourse->id, $teacherrole);
+        $generator->enrol_user($ada->id, $othercourse->id, $teacherrole);
+        $generator->enrol_user($student->id, $adacourse->id);
+
+        $this->setAdminUser();
+        $bylastname = $this->ids(search::search('Lovelace'));
+        $this->assertContains($adacourse->id, $bylastname);
+        $this->assertContains($othercourse->id, $bylastname);
+        $this->assertNotContains($alancourse->id, $bylastname);
+
+        $byfullname = $this->ids(search::search('Ada Lovelace'));
+        $this->assertContains($adacourse->id, $byfullname);
+        $this->assertNotContains($alancourse->id, $byfullname);
+
+        $bystudent = $this->ids(search::search('Hopper'));
+        $this->assertNotContains($adacourse->id, $bystudent);
+
+        $this->setUser($scenario->manager);
+        $managed = $this->ids(search::search('Lovelace'));
+        $this->assertContains($adacourse->id, $managed);
+        $this->assertNotContains($othercourse->id, $managed);
+    }
+
+    /**
      * A category manager searches every course in that category tree, and no other category.
      *
      * @covers ::search

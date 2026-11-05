@@ -378,6 +378,11 @@ class search {
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
+            [$lecturersql, $lecturerparams] = self::lecturer_match_sql($like);
+            if ($lecturersql !== '') {
+                $clauses[] = $lecturersql;
+                $params = array_merge($params, $lecturerparams);
+            }
         }
         if ($courseid !== null) {
             $clauses[] = 'c.id = ?';
@@ -507,6 +512,58 @@ class search {
             $ids[(int)$role->id] = (int)$role->id;
         }
         return array_values($ids);
+    }
+
+    /**
+     * SQL matching courses taught by a lecturer whose name contains the query.
+     *
+     * The returned parameters use positional placeholders and follow the SQL order.
+     *
+     * @param string $like Bound LIKE value, including wildcards.
+     * @return array{0: string, 1: array}
+     */
+    private static function lecturer_match_sql(string $like): array {
+        global $DB;
+
+        $roleids = self::lecturer_role_ids();
+        if (!$roleids) {
+            return ['', []];
+        }
+
+        [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_QM);
+        $ancestor = $DB->sql_concat('assignctx.path', "'/%'");
+        $nameclauses = [
+            $DB->sql_like('u.firstname', '?', false, true),
+            $DB->sql_like('u.lastname', '?', false, true),
+            $DB->sql_like('u.alternatename', '?', false, true),
+            $DB->sql_like($DB->sql_concat('u.firstname', "' '", 'u.lastname'), '?', false, true),
+            $DB->sql_like($DB->sql_concat('u.lastname', "' '", 'u.firstname'), '?', false, true),
+        ];
+        $sql = "c.id IN (
+                    SELECT e.courseid
+                      FROM {user} u
+                      JOIN {user_enrolments} ue ON ue.userid = u.id
+                      JOIN {enrol} e ON e.id = ue.enrolid
+                      JOIN {role_assignments} ra ON ra.userid = u.id
+                      JOIN {context} assignctx ON assignctx.id = ra.contextid
+                      JOIN {context} coursecx ON coursecx.instanceid = e.courseid
+                           AND coursecx.contextlevel = ?
+                           AND (coursecx.id = assignctx.id OR coursecx.path LIKE {$ancestor})
+                     WHERE u.deleted = 0
+                       AND e.status = ?
+                       AND ue.status = ?
+                       AND ue.timestart <= ?
+                       AND (ue.timeend = 0 OR ue.timeend > ?)
+                       AND ra.roleid {$rolesql}
+                       AND (" . implode(' OR ', $nameclauses) . ')
+                )';
+        $now = time();
+        $params = array_merge(
+            [CONTEXT_COURSE, ENROL_INSTANCE_ENABLED, ENROL_USER_ACTIVE, $now, $now],
+            $roleparams,
+            array_fill(0, count($nameclauses), $like)
+        );
+        return [$sql, $params];
     }
 
     /**

@@ -44,7 +44,7 @@ class external extends external_api {
      */
     public static function search_courses_parameters(): external_function_parameters {
         return new external_function_parameters([
-            'query' => new external_value(PARAM_TEXT, 'Course name, short name, id or id number'),
+            'query' => new external_value(PARAM_TEXT, 'Course name, short name, lecturer, id or id number'),
         ]);
     }
 
