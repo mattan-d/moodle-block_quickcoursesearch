@@ -77,6 +77,7 @@ class external extends external_api {
                     'category' => new external_value(PARAM_TEXT, 'Category path'),
                     'viewurl' => new external_value(PARAM_URL, 'Course page URL'),
                     'hidden' => new external_value(PARAM_BOOL, 'Whether the course is hidden'),
+                    'teachers' => new external_value(PARAM_TEXT, 'Lecturer names'),
                 ])
             ),
             'more' => new external_value(PARAM_BOOL, 'Whether more matches exist beyond the returned list'),
@@ -87,6 +88,7 @@ class external extends external_api {
             'hiddenlabel' => new external_value(PARAM_TEXT, 'Label for a hidden course'),
             'categorylabel' => new external_value(PARAM_TEXT, 'Label for the category'),
             'shortnamelabel' => new external_value(PARAM_TEXT, 'Label for the short name'),
+            'teacherslabel' => new external_value(PARAM_TEXT, 'Label for the lecturers'),
         ]);
     }
 }

@@ -37,6 +37,14 @@
     font-size: 0.8125rem;
 }
 
+.block_quickcoursesearch .quickcoursesearch-teachers {
+    color: #1d2125;
+}
+
+.block_quickcoursesearch .quickcoursesearch-metalabel {
+    font-weight: 600;
+}
+
 .block_quickcoursesearch .quickcoursesearch-name .badge {
     font-weight: 600;
     margin-inline-start: 0.25rem;

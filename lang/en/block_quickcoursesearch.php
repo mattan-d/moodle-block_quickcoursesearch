@@ -38,4 +38,5 @@ $string['noresults'] = 'No courses found';
 $string['searchlabel'] = 'Search courses';
 $string['searchplaceholder'] = 'Course name, short name, ID or ID number';
 $string['shortnamelabel'] = 'Short name';
+$string['teacherslabel'] = 'Lecturer';
 $string['tooshort'] = 'Enter at least {$a} characters, or a course ID';

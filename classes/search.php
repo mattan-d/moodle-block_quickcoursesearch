@@ -430,7 +430,7 @@ class search {
             }
         }
 
-        return ['courses' => $courses, 'more' => $more];
+        return ['courses' => self::attach_lecturers($courses), 'more' => $more];
     }
 
     /**
@@ -455,7 +455,119 @@ class search {
             'category' => self::category_path((int)$course->category),
             'viewurl' => (new moodle_url('/course/view.php', ['id' => $course->id]))->out(false),
             'hidden' => empty($course->visible),
+            'teachers' => '',
         ];
+    }
+
+    /**
+     * Add the lecturer names shown under each course.
+     *
+     * @param array $courses Formatted courses.
+     * @return array
+     */
+    private static function attach_lecturers(array $courses): array {
+        if (!$courses) {
+            return $courses;
+        }
+        $names = self::lecturer_names(array_column($courses, 'id'));
+        foreach ($courses as $index => $course) {
+            $courses[$index]['teachers'] = $names[$course['id']] ?? '';
+        }
+        return $courses;
+    }
+
+    /**
+     * Roles whose enrolled users are shown as the course lecturers.
+     *
+     * The site's course-contact roles are included, together with the teacher
+     * and editing-teacher roles and any custom role based on those archetypes.
+     *
+     * @return int[]
+     */
+    private static function lecturer_role_ids(): array {
+        global $CFG, $DB;
+
+        $ids = [];
+        if (!empty($CFG->coursecontact)) {
+            foreach (explode(',', $CFG->coursecontact) as $roleid) {
+                $roleid = (int)$roleid;
+                if ($roleid > 0) {
+                    $ids[$roleid] = $roleid;
+                }
+            }
+        }
+        $roles = $DB->get_records_select(
+            'role',
+            "shortname IN ('teacher', 'editingteacher') OR archetype IN ('teacher', 'editingteacher')",
+            null,
+            '',
+            'id'
+        );
+        foreach ($roles as $role) {
+            $ids[(int)$role->id] = (int)$role->id;
+        }
+        return array_values($ids);
+    }
+
+    /**
+     * Lecturer names for each course, in the viewer's name format.
+     *
+     * @param int[] $courseids
+     * @return array<int, string>
+     */
+    private static function lecturer_names(array $courseids): array {
+        global $DB;
+
+        $roleids = self::lecturer_role_ids();
+        $courseids = array_values(array_unique(array_map('intval', $courseids)));
+        if (!$roleids || !$courseids) {
+            return [];
+        }
+
+        [$coursesql, $courseparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'cid');
+        [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'rid');
+        $namefields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
+        $ancestor = $DB->sql_concat('assignctx.path', "'/%'");
+
+        $sql = "SELECT target.instanceid AS courseid, u.id AS userid, {$namefields}
+                  FROM {context} target
+                  JOIN {context} assignctx
+                    ON assignctx.id = target.id OR target.path LIKE {$ancestor}
+                  JOIN {role_assignments} ra ON ra.contextid = assignctx.id AND ra.roleid {$rolesql}
+                  JOIN {user} u ON u.id = ra.userid AND u.deleted = 0
+                  JOIN {enrol} e ON e.courseid = target.instanceid AND e.status = :enabled
+                  JOIN {user_enrolments} ue ON ue.enrolid = e.id AND ue.userid = u.id
+                       AND ue.status = :active
+                       AND ue.timestart <= :now1
+                       AND (ue.timeend = 0 OR ue.timeend > :now2)
+                 WHERE target.contextlevel = :courselevel
+                   AND target.instanceid {$coursesql}";
+        $params = [
+            'enabled' => ENROL_INSTANCE_ENABLED,
+            'active' => ENROL_USER_ACTIVE,
+            'now1' => time(),
+            'now2' => time(),
+            'courselevel' => CONTEXT_COURSE,
+        ] + $courseparams + $roleparams;
+
+        $bycourse = [];
+        $records = $DB->get_recordset_sql($sql, $params);
+        foreach ($records as $record) {
+            $bycourse[(int)$record->courseid][(int)$record->userid] = $record;
+        }
+        $records->close();
+
+        $names = [];
+        foreach ($bycourse as $courseid => $users) {
+            $context = context_course::instance($courseid);
+            $fullnames = [];
+            foreach ($users as $user) {
+                $fullnames[] = core_user::get_fullname($user, $context);
+            }
+            \core_collator::asort($fullnames);
+            $names[$courseid] = implode(', ', $fullnames);
+        }
+        return $names;
     }
 
     /**
@@ -549,6 +661,7 @@ class search {
         $result['hiddenlabel'] = get_string('hiddencourse', 'block_quickcoursesearch');
         $result['categorylabel'] = get_string('categorylabel', 'block_quickcoursesearch');
         $result['shortnamelabel'] = get_string('shortnamelabel', 'block_quickcoursesearch');
+        $result['teacherslabel'] = get_string('teacherslabel', 'block_quickcoursesearch');
         return $result;
     }
 }

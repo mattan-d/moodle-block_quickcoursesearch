@@ -38,4 +38,5 @@ $string['noresults'] = 'לא נמצאו קורסים';
 $string['searchlabel'] = 'חיפוש קורסים';
 $string['searchplaceholder'] = 'שם הקורס, שם מקוצר, מזהה או מספר מזהה';
 $string['shortnamelabel'] = 'שם מקוצר';
+$string['teacherslabel'] = 'מרצה';
 $string['tooshort'] = 'יש להזין לפחות {$a} תווים, או מזהה קורס';

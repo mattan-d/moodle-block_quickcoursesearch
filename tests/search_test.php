@@ -65,6 +65,33 @@ final class search_test extends advanced_testcase {
         $this->assertTrue($hidden['hidden']);
         $this->assertStringContainsString('/course/view.php', $hidden['viewurl']);
         $this->assertStringContainsString('Science', $hidden['category']);
+        $this->assertSame('', $hidden['teachers']);
+    }
+
+    /**
+     * Lecturer names are shown so courses that share a name can be told apart.
+     *
+     * @covers ::search
+     */
+    public function test_search_result_includes_lecturer_names(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $scenario = $this->create_scenario();
+        $ada = $this->getDataGenerator()->create_user(['firstname' => 'Ada', 'lastname' => 'Lovelace']);
+        $alan = $this->getDataGenerator()->create_user(['firstname' => 'Alan', 'lastname' => 'Turing']);
+        $student = $this->getDataGenerator()->create_user(['firstname' => 'Grace', 'lastname' => 'Hopper']);
+        $teacherrole = (int)$DB->get_field('role', 'id', ['shortname' => 'editingteacher']);
+        $this->getDataGenerator()->enrol_user($ada->id, $scenario->visible->id, $teacherrole);
+        $this->getDataGenerator()->enrol_user($alan->id, $scenario->visible->id, $teacherrole);
+        $this->getDataGenerator()->enrol_user($student->id, $scenario->visible->id);
+
+        $this->setAdminUser();
+        $course = $this->course_by_id(search::search('Alpha'), $scenario->visible->id);
+        $this->assertStringContainsString('Ada Lovelace', $course['teachers']);
+        $this->assertStringContainsString('Alan Turing', $course['teachers']);
+        $this->assertStringNotContainsString('Grace Hopper', $course['teachers']);
+        $this->assertSame(get_string('teacherslabel', 'block_quickcoursesearch'), search::search('Alpha')['teacherslabel']);
     }
 
     /**

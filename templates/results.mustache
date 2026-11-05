@@ -35,13 +35,15 @@
         "hiddenlabel": "Hidden",
         "categorylabel": "Category",
         "shortnamelabel": "Short name",
+        "teacherslabel": "Lecturer",
         "courses": [{
             "id": 2,
             "fullname": "Biology",
             "shortname": "BIO",
             "category": "Science",
             "viewurl": "https://example.com/course/view.php?id=2",
-            "hidden": false
+            "hidden": false,
+            "teachers": "Ada Lovelace"
         }]
     }
 }}
@@ -59,6 +61,11 @@
                             <span class="badge badge-secondary">{{hiddenlabel}}</span>
                         {{/hidden}}
                     </span>
+                    {{#teachers}}
+                        <span class="quickcoursesearch-meta quickcoursesearch-teachers">
+                            <span class="quickcoursesearch-metalabel">{{teacherslabel}}:</span> {{teachers}}
+                        </span>
+                    {{/teachers}}
                     <span class="quickcoursesearch-meta">
                         <span class="sr-only">{{categorylabel}} </span>{{category}}
                     </span>
